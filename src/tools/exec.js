@@ -5,8 +5,25 @@ const registry = require('./registry');
 // Long enough for package installs (pkg install python takes a few minutes on a phone).
 const EXEC_TIMEOUT_MS = 5 * 60 * 1000;
 
-registry.register('exec', ({ command } = {}) => new Promise((resolve, reject) => {
-  if (!command) return reject(new Error('no command provided'));
+// Models don't always format arguments perfectly — accept the common variants.
+function pickCommand(args) {
+  if (typeof args === 'string') return args.trim();
+  if (!args || typeof args !== 'object') return '';
+  const v = args.command ?? args.cmd ?? args.shell ?? args.script ?? args.code ?? args.input;
+  if (typeof v === 'string') return v.trim();
+  if (Array.isArray(v)) return v.join(' ').trim();
+  if (typeof args.raw === 'string') {
+    const raw = args.raw.trim();
+    // {"command": "…"} with broken JSON (e.g. unescaped quotes) → grab the value
+    const m = raw.match(/"(?:command|cmd)"\s*:\s*"([\s\S]*)"\s*}?\s*$/);
+    return (m ? m[1].replace(/\\"/g, '"') : raw.replace(/^[{\s]+|[}\s]+$/g, '')).trim();
+  }
+  return '';
+}
+
+registry.register('exec', (args = {}) => new Promise((resolve, reject) => {
+  const command = pickCommand(args);
+  if (!command) return reject(new Error('no command provided — use <tool:exec>{"command": "..."}</tool>'));
   exec(command, {
     encoding:  'utf8',
     timeout:   EXEC_TIMEOUT_MS,

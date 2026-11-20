@@ -98,10 +98,24 @@ class Engine {
         body:    JSON.stringify(body),
         signal,
       });
-      if (![500, 502, 503, 504].includes(res.status) || attempt >= RETRY_DELAYS.length) break;
+      if (attempt >= RETRY_DELAYS.length) break;
+      let wait = null;
+      if ([500, 502, 503, 504].includes(res.status)) {
+        wait = RETRY_DELAYS[attempt];
+      } else if (res.status === 429) {
+        // per-minute limits (e.g. Groq "try again in 9.4s") are worth waiting out;
+        // daily quotas are not
+        const text = await res.clone().text().catch(() => '');
+        const hdr  = parseFloat(res.headers.get('retry-after'));
+        const m    = text.match(/try again in ([\d.]+)\s*(ms|s)\b/i) || text.match(/retry in ([\d.]+)\s*(ms|s)\b/i);
+        const secs = !isNaN(hdr) ? hdr : m ? (m[2].toLowerCase() === 'ms' ? parseFloat(m[1]) / 1000 : parseFloat(m[1])) : null;
+        const daily = /per day|PerDay|free_tier_requests/i.test(text);
+        if (secs !== null && secs <= 45 && !daily) wait = Math.ceil(secs * 1000) + 500;
+      }
+      if (wait === null) break;
       try { await res.text(); } catch {}
       await new Promise((resolve, reject) => {
-        const t = setTimeout(resolve, RETRY_DELAYS[attempt]);
+        const t = setTimeout(resolve, wait);
         signal && signal.addEventListener('abort', () => { clearTimeout(t); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); }, { once: true });
       });
     }
