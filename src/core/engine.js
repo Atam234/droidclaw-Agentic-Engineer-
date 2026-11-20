@@ -88,12 +88,23 @@ class Engine {
       body.reasoning_effort = 'low';
       body.max_tokens = Math.max(body.max_tokens, 4096);
     }
-    const res  = await fetch(`${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` },
-      body:    JSON.stringify(body),
-      signal,
-    });
+    // Retry when the provider is temporarily overloaded (e.g. Gemini 503 "high demand")
+    const RETRY_DELAYS = [1500, 4000, 8000];
+    let res;
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch(`${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` },
+        body:    JSON.stringify(body),
+        signal,
+      });
+      if (![500, 502, 503, 504].includes(res.status) || attempt >= RETRY_DELAYS.length) break;
+      try { await res.text(); } catch {}
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(resolve, RETRY_DELAYS[attempt]);
+        signal && signal.addEventListener('abort', () => { clearTimeout(t); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); }, { once: true });
+      });
+    }
 
     if (!res.ok) {
       const err = await res.text();

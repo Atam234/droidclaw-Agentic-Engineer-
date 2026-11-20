@@ -172,6 +172,8 @@ function friendlyError(msg) {
     return 'AI provider rejected the API key — check it in Settings. (' + m.slice(0, 400) + ')';
   if (/API 404/.test(m) || /not found|does not exist/i.test(m))
     return 'model not found — check the model name in Settings. (' + m.slice(0, 400) + ')';
+  if (/API 50[0234]/.test(m) || /high demand|overloaded|unavailable/i.test(m))
+    return 'the AI is busy right now (too many people using it). Kira tried a few times — wait a minute and send again.';
   if (/API 429/.test(m) || /quota|rate/i.test(m))
     return 'free limit reached — wait a bit and try again. (' + m.slice(0, 400) + ')';
   if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(m))
