@@ -120,7 +120,7 @@
     setBusy(true);
     controller = new AbortController();
 
-    let bubble = null, full = '', toolEl = null;
+    let bubble = null, full = '', toolEl = null, gotError = false;
     const ensureBubble = () => {
       if (!bubble) { removeTyping(); bubble = addMsg('kira', ''); bubble.classList.add('streaming'); full = ''; }
       return bubble;
@@ -160,10 +160,10 @@
               removeTyping();
               if (!full.trim() && ev.reply && ev.reply.trim()) { ensureBubble(); full = ev.reply; bubble.innerHTML = render(full); }
               else if (bubble && !full.trim()) bubble.remove();
-              else if (!bubble && !ev.aborted) addMsg('error', 'no reply — try again?');
+              else if (!bubble && !ev.aborted && !gotError) addMsg('error', 'no reply — try again?');
               break;
             case 'error':
-              removeTyping(); addMsg('error', ev.error);
+              removeTyping(); addMsg('error', ev.error); gotError = true;
               break;
           }
           if (stick) scrollDown();

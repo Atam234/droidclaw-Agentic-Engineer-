@@ -163,6 +163,19 @@ function makeTokenFilter(emit) {
 
 let _busy = false;
 
+function friendlyError(msg) {
+  const m = String(msg || '');
+  if (/API 40[13]/.test(m) || /API key not valid|invalid api key|PERMISSION_DENIED/i.test(m))
+    return 'AI provider rejected the API key — check it in Settings. (' + m.slice(0, 160) + ')';
+  if (/API 404/.test(m) || /not found|does not exist/i.test(m))
+    return 'model not found — check the model name in Settings. (' + m.slice(0, 160) + ')';
+  if (/API 429/.test(m) || /quota|rate/i.test(m))
+    return 'free limit reached — wait a bit and try again. (' + m.slice(0, 160) + ')';
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(m))
+    return "can't reach the AI provider — check your internet or the API base URL.";
+  return m.slice(0, 300);
+}
+
 // ── chat (streams NDJSON events) ──────────────────────────────────────────────
 async function handleChat(req, res) {
   let body;
@@ -174,6 +187,7 @@ async function handleChat(req, res) {
   if (_busy) return json(res, 409, { error: 'kira is still answering the previous message' });
 
   _busy = true;
+  engine.lastError = null;
   res.writeHead(200, {
     'Content-Type': 'application/x-ndjson; charset=utf-8',
     'Cache-Control': 'no-store',
@@ -198,7 +212,12 @@ async function handleChat(req, res) {
           send({ type: 'tool', name, result: String(result).slice(0, 400) });
         }
       },
-      (reply, aborted) => send({ type: 'done', reply: reply || '', aborted: !!aborted })
+      (reply, aborted) => {
+        if (!aborted && !(reply || '').trim() && engine.lastError) {
+          send({ type: 'error', error: friendlyError(engine.lastError) });
+        }
+        send({ type: 'done', reply: reply || '', aborted: !!aborted });
+      }
     );
   } catch (e) {
     send({ type: 'error', error: e.message });

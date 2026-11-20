@@ -63,6 +63,8 @@ class Engine {
           this.history = this.history.slice(0, -1);
           onDone && onDone(null); // null = interrupted
         } else {
+          this.lastError = err.message;
+          try { console.error('[engine] ' + err.message); } catch {}
           onDone && onDone('');
         }
       });
@@ -79,22 +81,30 @@ class Engine {
 
   async _streamOpenAI(system, messages, cfg, maxTokens, signal, onToken) {
     const msgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
-    const res  = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    const body = { model: cfg.model, messages: msgs, max_tokens: maxTokens || 2048, stream: true };
+    // Gemini "thinking" models spend max_tokens on reasoning first; with a small
+    // budget the visible reply comes back empty. Keep thinking short and leave room.
+    if (/generativelanguage\.googleapis\.com/.test(cfg.baseUrl || '')) {
+      body.reasoning_effort = 'low';
+      body.max_tokens = Math.max(body.max_tokens, 4096);
+    }
+    const res  = await fetch(`${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` },
-      body:    JSON.stringify({ model: cfg.model, messages: msgs, max_tokens: maxTokens || 2048, stream: true }),
+      body:    JSON.stringify(body),
       signal,
     });
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`API ${res.status}: ${err.slice(0, 200)}`);
+      throw new Error(`API ${res.status}: ${err.slice(0, 300)}`);
     }
 
     const reader  = res.body.getReader();
     const decoder = new TextDecoder();
     let   full    = '';
     let   buf     = '';
+    let   finish  = null;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -125,11 +135,14 @@ class Engine {
         try {
           const json  = JSON.parse(trimmed.slice(6));
           const token = json.choices?.[0]?.delta?.content || '';
+          if (json.choices?.[0]?.finish_reason) finish = json.choices[0].finish_reason;
+          if (json.error) throw new Error('API error: ' + (json.error.message || JSON.stringify(json.error)).slice(0, 300));
           if (token) { full += token; onToken && onToken(token); }
-        } catch {}
+        } catch (e) { if (e.message.startsWith('API error')) throw e; }
       }
     }
 
+    if (!full.trim()) throw new Error(`model returned an empty reply (finish_reason: ${finish || 'none'})`);
     return full;
   }
 
