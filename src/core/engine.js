@@ -97,7 +97,7 @@ class Engine {
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`API ${res.status}: ${err.slice(0, 300)}`);
+      throw new Error(`API ${res.status}: ${err.slice(0, 1000)}`);
     }
 
     const reader  = res.body.getReader();

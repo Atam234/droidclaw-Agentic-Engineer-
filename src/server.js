@@ -164,13 +164,16 @@ function makeTokenFilter(emit) {
 let _busy = false;
 
 function friendlyError(msg) {
-  const m = String(msg || '');
+  let m = String(msg || '');
+  // Pull the human-readable "message" out of a JSON error body if present
+  const inner = m.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (inner) m = m.replace(/:\s*[\[{][\s\S]*$/, '') + ': ' + inner[1].replace(/\\n/g, ' ').replace(/\\"/g, '"');
   if (/API 40[13]/.test(m) || /API key not valid|invalid api key|PERMISSION_DENIED/i.test(m))
-    return 'AI provider rejected the API key — check it in Settings. (' + m.slice(0, 160) + ')';
+    return 'AI provider rejected the API key — check it in Settings. (' + m.slice(0, 400) + ')';
   if (/API 404/.test(m) || /not found|does not exist/i.test(m))
-    return 'model not found — check the model name in Settings. (' + m.slice(0, 160) + ')';
+    return 'model not found — check the model name in Settings. (' + m.slice(0, 400) + ')';
   if (/API 429/.test(m) || /quota|rate/i.test(m))
-    return 'free limit reached — wait a bit and try again. (' + m.slice(0, 160) + ')';
+    return 'free limit reached — wait a bit and try again. (' + m.slice(0, 400) + ')';
   if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(m))
     return "can't reach the AI provider — check your internet or the API base URL.";
   return m.slice(0, 300);
