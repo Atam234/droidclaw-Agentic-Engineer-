@@ -105,7 +105,7 @@ class AgentLoop {
         try {
           const result = await _withTimeout(
             require('../tools/registry').execute(tool.name, tool.args),
-            10000
+            tool.name === 'exec' ? 6 * 60 * 1000 : 30000
           );
           const rs = String(result || '').slice(0, 1000);
           toolResults += `[${tool.name}]: ${rs}\n`;
