@@ -185,7 +185,13 @@ kira              # start Kira + background daemon auto-starts
 kira status       # see what Kira's been thinking
 kira logs         # view daemon log
 kira stop         # stop background daemon
+kira serve        # API server for the Kira mobile app
 ```
+
+### Mobile app
+
+Prefer tapping to typing in Termux? Run `kira serve` and open Kira as a real
+phone app (APK or home-screen web app). See [mobile/README.md](mobile/README.md).
 
 Inside Kira:
 ```

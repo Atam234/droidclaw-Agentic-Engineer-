@@ -170,7 +170,11 @@ class AgentLoop {
 }
 
 function _cleanOutput(text) {
-  return text.replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/thinking[\s\S]*?<\/think>/gi, '')
+    .replace(/<\/?think>/gi, '')
+    .trim();
 }
 
 function _withTimeout(promise, ms) {

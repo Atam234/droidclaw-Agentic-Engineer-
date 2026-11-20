@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#0d0f14">
+  <meta name="color-scheme" content="dark light">
+  <title>Kira</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">◈</span>
+        <div>
+          <div class="title">Kira</div>
+          <div class="sub" id="conn"><span class="dot"></span><span id="connText">connecting…</span></div>
+        </div>
+      </div>
+      <button class="icon-btn" id="clearBtn" title="Clear conversation" aria-label="Clear conversation">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9z"/></svg>
+      </button>
+    </header>
+
+    <main>
+      <!-- CHAT -->
+      <section class="view active" id="view-chat">
+        <div class="messages" id="messages">
+          <div class="empty" id="empty">
+            <div class="empty-logo">◈</div>
+            <p>hey. what do you need?</p>
+            <div class="chips">
+              <button class="chip">how are you?</button>
+              <button class="chip">what have you been thinking about?</button>
+              <button class="chip">check my battery</button>
+            </div>
+          </div>
+        </div>
+        <form class="composer" id="composer" autocomplete="off">
+          <textarea id="input" rows="1" placeholder="message kira…" enterkeyhint="send"></textarea>
+          <button type="submit" class="send" id="sendBtn" aria-label="Send">
+            <svg class="i-send" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3 20.5 21 12 3 3.5v6.6L15 12 3 13.9z"/></svg>
+            <svg class="i-stop" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+          </button>
+        </form>
+      </section>
+
+      <!-- MIND -->
+      <section class="view" id="view-mind">
+        <div class="scroll">
+          <div class="card">
+            <div class="card-label">mood</div>
+            <div class="mood" id="mood">—</div>
+          </div>
+          <div class="stats" id="stats"></div>
+          <div class="card">
+            <div class="card-label">what she's been thinking</div>
+            <ul class="list" id="thoughts"></ul>
+          </div>
+          <div class="card">
+            <div class="card-label">what she's noticed</div>
+            <ul class="list" id="observations"></ul>
+          </div>
+          <div class="card">
+            <div class="card-label">still unsure about</div>
+            <ul class="list" id="uncertainties"></ul>
+          </div>
+          <button class="btn ghost" id="refreshMind">refresh</button>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings">
+        <div class="scroll">
+          <form class="card form" id="connForm">
+            <div class="card-label">connection</div>
+            <label>Server URL
+              <input id="serverUrl" type="url" inputmode="url" placeholder="http://127.0.0.1:7071" required>
+            </label>
+            <label>App token
+              <input id="token" type="password" placeholder="shown when you run: kira serve" required>
+            </label>
+            <button class="btn" type="submit">save &amp; connect</button>
+            <p class="hint">In Termux run <code>kira serve</code>. It prints the URL and token.</p>
+          </form>
+
+          <form class="card form" id="modelForm">
+            <div class="card-label">kira</div>
+            <label>Your name <input id="cfgName" type="text"></label>
+            <label>API base URL <input id="cfgBaseUrl" type="url" inputmode="url" placeholder="https://integrate.api.nvidia.com/v1"></label>
+            <label>Model <input id="cfgModel" type="text" placeholder="minimaxai/minimax-m2.7"></label>
+            <label>API key <input id="cfgKey" type="password" placeholder="leave empty to keep current key"></label>
+            <button class="btn" type="submit">save</button>
+            <p class="hint" id="cfgStatus"></p>
+          </form>
+
+          <div class="card about">
+            <div class="card-label">about</div>
+            <p>Kira runs on your phone inside Termux. This app is just a window into her — your conversations and memory stay on your device.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="tabbar" role="tablist">
+      <button class="tab active" data-view="chat" role="tab">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-5 4V5a1 1 0 0 1 1-1z"/></svg>
+        <span>chat</span>
+      </button>
+      <button class="tab" data-view="mind" role="tab">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-4 12.7V18a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3.3A7 7 0 0 0 12 2zM9 21h6v1H9z"/></svg>
+        <span>mind</span>
+      </button>
+      <button class="tab" data-view="settings" role="tab">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4L10.6 6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.7h4l.4-2.7a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+        <span>settings</span>
+      </button>
+    </nav>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
