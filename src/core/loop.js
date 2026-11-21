@@ -8,7 +8,7 @@ const selfModel   = require('../self_model');
 const skillMatcher = require('../tools/skill_matcher');
 const workspace   = require('../workspace');
 
-const MAX_ITER        = 5;
+const MAX_ITER        = 10;
 const BACKGROUND_EVERY = 20;
 
 let _loopRunning = false; // mutex to prevent concurrent runs from TUI + Telegram
@@ -143,7 +143,16 @@ class AgentLoop {
       reply = executor.cleanReply(cleanFull);
     }
 
-    if (iter >= MAX_ITER && !reply) reply = 'hit the limit — something got stuck.';
+    if (iter >= MAX_ITER && (tools.length > 0 || !reply)) {
+      // Out of steps: ask for a plain summary of what happened instead of a canned message
+      engine.history.push({ role: 'user', content: '[system] You are out of tool steps for this request. Do not call any more tools. In 1-3 sentences, tell the user honestly what you did, what worked, what failed, and what they can do next.' });
+      onThink && onThink();
+      const finalText = await this._streamTurn('', onToken);
+      const idx = engine.history.findLastIndex(m => m.content.startsWith('[system] You are out of tool steps'));
+      if (idx !== -1) engine.history.splice(idx, 1);
+      reply = finalText ? executor.cleanReply(_cleanOutput(finalText)) : '';
+      if (!reply) reply = `I ran out of steps (${MAX_ITER}) before finishing.`;
+    }
 
     heartbeat.tick();
     mind.incrementConversations();

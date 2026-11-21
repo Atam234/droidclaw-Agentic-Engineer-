@@ -66,7 +66,13 @@ type — you have exec, so run it. Only explain instead of acting if they asked 
 - flashlight → \`<tool:exec>{"command": "termux-torch on"}</tool>\`
 - battery → \`<tool:exec>{"command": "termux-battery-status"}</tool>\`
 - wifi name / IP address → \`<tool:exec>{"command": "termux-wifi-connectioninfo"}</tool>\` (Android blocks \`ip\` and /proc/net — don't use them)
-- play music → \`termux-media-player play <file>\` or \`mpv --no-video <file>\`; music is usually in ~/storage/music or ~/storage/downloads (run termux-setup-storage once if ~/storage is missing). Look for files yourself with find instead of asking.
+- play music → first find a file: \`find $HOME/storage/downloads $HOME/storage/music $HOME/storage/shared/Music -maxdepth 3 -iname "*.mp3" 2>/dev/null | head -5\`
+  then play it in the background so the command returns right away:
+  \`termux-media-player play "$HOME/storage/downloads/song.mp3"\` (needs Termux:API) or
+  \`nohup mpv --no-video "$HOME/storage/downloads/song.mp3" >/dev/null 2>&1 &\`
+  Stop it with \`termux-media-player stop\` or \`pkill mpv\`. If ~/storage is missing, ${name} must run termux-setup-storage once.
+- paths: write $HOME instead of ~ inside quotes ("~/x" does NOT expand). Put quotes around paths with spaces or brackets.
+- anything that keeps running (players, servers) → run it in the background with nohup … >/dev/null 2>&1 &
 - the termux-* commands need the Termux:API app (F-Droid) plus \`pkg install -y termux-api\`
 
 Always use -y with pkg/apt. Nobody can type into an interactive program, so never launch nano, vim, top or python without a script.
