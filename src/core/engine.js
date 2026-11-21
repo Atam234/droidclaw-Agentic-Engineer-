@@ -88,6 +88,27 @@ class Engine {
       body.reasoning_effort = 'low';
       body.max_tokens = Math.max(body.max_tokens, 4096);
     }
+    // Offer native function calling. Many models (gpt-oss, Gemini, Llama) prefer it over
+    // the <tool:…> text syntax — and some providers reject a native call when no tools
+    // were offered. Native calls are turned back into <tool:…> text so the loop is unchanged.
+    const key = `${cfg.baseUrl}|${cfg.model}`;
+    if (!_noNativeTools.has(key)) {
+      body.tools = _nativeToolDefs();
+      body.tool_choice = 'auto';
+    }
+    try {
+      return await this._streamOpenAIOnce(body, cfg, signal, onToken);
+    } catch (e) {
+      if (body.tools && /API 4\d\d/.test(e.message) && /tool|function/i.test(e.message) && !/called a tool/i.test(e.message)) {
+        _noNativeTools.add(key);           // this model/provider can't do tools — use text syntax
+        delete body.tools; delete body.tool_choice;
+        return await this._streamOpenAIOnce(body, cfg, signal, onToken);
+      }
+      throw e;
+    }
+  }
+
+  async _streamOpenAIOnce(body, cfg, signal, onToken) {
     // Retry when the provider is temporarily overloaded (e.g. Gemini 503 "high demand")
     const RETRY_DELAYS = [1500, 4000, 8000];
     let res;
@@ -130,42 +151,36 @@ class Engine {
     let   full    = '';
     let   buf     = '';
     let   finish  = null;
+    const calls   = [];   // native tool calls, accumulated across chunks
+
+    const handle = (trimmed) => {
+      if (!trimmed || trimmed === 'data: [DONE]' || !trimmed.startsWith('data: ')) return;
+      let json;
+      try { json = JSON.parse(trimmed.slice(6)); } catch { return; }
+      if (json.error) throw new Error('API error: ' + (json.error.message || JSON.stringify(json.error)).slice(0, 300));
+      const choice = json.choices?.[0];
+      if (!choice) return;
+      if (choice.finish_reason) finish = choice.finish_reason;
+      const token = choice.delta?.content || '';
+      if (token) { full += token; onToken && onToken(token); }
+      for (const tc of choice.delta?.tool_calls || []) {
+        const i = tc.index ?? calls.length;
+        calls[i] = calls[i] || { name: '', args: '' };
+        if (tc.function?.name)      calls[i].name += tc.function.name;
+        if (tc.function?.arguments) calls[i].args += tc.function.arguments;
+      }
+    };
 
     while (true) {
       const { done, value } = await reader.read();
-
-      if (done) {
-        // flush remaining buffer — this fixes incomplete last sentences
-        if (buf.trim()) {
-          const trimmed = buf.trim();
-          if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
-            try {
-              const json  = JSON.parse(trimmed.slice(6));
-              const token = json.choices?.[0]?.delta?.content || '';
-              if (token) { full += token; onToken && onToken(token); }
-            } catch {}
-          }
-        }
-        break;
-      }
-
+      if (done) { handle(buf.trim()); break; }
       buf += decoder.decode(value, { stream: true });
       const lines = buf.split('\n');
       buf = lines.pop(); // keep incomplete line in buffer
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === 'data: [DONE]') continue;
-        if (!trimmed.startsWith('data: ')) continue;
-        try {
-          const json  = JSON.parse(trimmed.slice(6));
-          const token = json.choices?.[0]?.delta?.content || '';
-          if (json.choices?.[0]?.finish_reason) finish = json.choices[0].finish_reason;
-          if (json.error) throw new Error('API error: ' + (json.error.message || JSON.stringify(json.error)).slice(0, 300));
-          if (token) { full += token; onToken && onToken(token); }
-        } catch (e) { if (e.message.startsWith('API error')) throw e; }
-      }
+      for (const line of lines) handle(line.trim());
     }
+
+    for (const c of calls.filter(Boolean)) full += _nativeCallToTag(c);
 
     if (!full.trim()) throw new Error(`model returned an empty reply (finish_reason: ${finish || 'none'})`);
     return full;
@@ -289,6 +304,59 @@ class Engine {
   }
 
   _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+}
+
+// ── native function calling ──────────────────────────────────────────────────
+const _noNativeTools = new Set();
+
+function _nativeToolDefs() {
+  let others = '';
+  try {
+    others = require('../tools/registry').list().filter(n => n !== 'exec').join(', ');
+  } catch {}
+  return [
+    {
+      type: 'function',
+      function: {
+        name: 'exec',
+        description: 'Run a shell command in Termux on the phone and get its output. Use for installs (pkg install -y …), files, termux-api commands, anything on the device.',
+        parameters: {
+          type: 'object',
+          properties: { command: { type: 'string', description: 'the shell command to run' } },
+          required: ['command'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'use_tool',
+        description: 'Call one of Kira\'s other tools by name' + (others ? ': ' + others.slice(0, 900) : ''),
+        parameters: {
+          type: 'object',
+          properties: {
+            name:           { type: 'string', description: 'tool name' },
+            arguments_json: { type: 'string', description: 'the tool arguments as a JSON object string, e.g. {"query":"weather"}' },
+          },
+          required: ['name'],
+        },
+      },
+    },
+  ];
+}
+
+function _nativeCallToTag(call) {
+  let args = {};
+  try { args = call.args ? JSON.parse(call.args) : {}; } catch { args = { raw: call.args }; }
+  let name = (call.name || '').replace(/^functions\./, '').trim();
+  if (name === 'use_tool') {
+    name = String(args.name || '').trim();
+    let inner = args.arguments_json ?? args.arguments ?? {};
+    if (typeof inner === 'string') { try { inner = JSON.parse(inner || '{}'); } catch { inner = { raw: inner }; } }
+    args = inner;
+  }
+  if (!/^\w+$/.test(name)) return '';
+  return `\n<tool:${name}>${JSON.stringify(args)}</tool>`;
 }
 
 function _readEmotion() {
