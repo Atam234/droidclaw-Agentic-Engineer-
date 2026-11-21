@@ -96,6 +96,21 @@ class Engine {
       body.tools = _nativeToolDefs();
       body.tool_choice = 'auto';
     }
+    for (let fix = 0; fix < 3; fix++) {
+      try {
+        return await this._streamOpenAIOnce(body, cfg, signal, onToken);
+      } catch (e) {
+        const m = body.tools && e.message.match(/call(?:ed)? (?:a )?tool '?"?(\w+)'?"? which was not in request\.tools/i);
+        if (!m) throw e;
+        const reg = require('../tools/registry');
+        if (reg.has(m[1]) && !body.tools.some(t => t.function.name === m[1])) {
+          body.tools.push(_genericToolDef(m[1]));          // offer it and try again
+        } else {
+          body.messages = [...body.messages, { role: 'user', content:
+            `[system] There is no tool named "${m[1]}" right now. Use exec with a shell command instead (e.g. termux-torch on, termux-battery-status).` }];
+        }
+      }
+    }
     try {
       return await this._streamOpenAIOnce(body, cfg, signal, onToken);
     } catch (e) {
@@ -343,6 +358,15 @@ function _nativeToolDefs() {
       },
     },
   ];
+}
+
+function _genericToolDef(name) {
+  let description = name;
+  try {
+    const line = require('../tools/registry').listWithDescriptions().split('\n').find(l => l.startsWith(name + ':'));
+    if (line) description = line.slice(name.length + 1).trim() || name;
+  } catch {}
+  return { type: 'function', function: { name, description, parameters: { type: 'object', properties: {}, additionalProperties: true } } };
 }
 
 function _nativeCallToTag(call) {

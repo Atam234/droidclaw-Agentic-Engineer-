@@ -4,6 +4,7 @@ const path = require('path');
 const os   = require('os');
 
 const tools    = {};
+const hidden   = new Set();   // tools whose backing service isn't available right now
 const LOG_FILE = path.join(os.homedir(), '.droidclaw', 'tool_log.json');
 
 function register(name, fn, description) {
@@ -19,11 +20,18 @@ async function execute(name, args) {
 }
 
 function list() {
-  return Object.keys(tools);
+  return Object.keys(tools).filter(n => !hidden.has(n));
+}
+
+function has(name) { return !!tools[name] && !hidden.has(name); }
+
+function setHidden(names, hide) {
+  for (const n of names) hide ? hidden.add(n) : hidden.delete(n);
 }
 
 function listWithDescriptions() {
   return Object.entries(tools)
+    .filter(([name]) => !hidden.has(name))
     .map(([name, t]) => t.description ? `${name}: ${t.description}` : name)
     .join('\n');
 }
@@ -40,4 +48,4 @@ function _log(entry) {
   } catch {}
 }
 
-module.exports = { register, execute, list, listWithDescriptions };
+module.exports = { register, execute, list, has, setHidden, listWithDescriptions };

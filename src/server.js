@@ -203,6 +203,7 @@ async function handleChat(req, res) {
   const send = (ev) => { try { res.write(JSON.stringify(ev) + '\n'); } catch {} };
   const filter = makeTokenFilter(text => send({ type: 'token', text }));
 
+  const ping = setInterval(() => send({ type: 'ping' }), 15000);
   let closed = false;
   res.on('close', () => { if (!res.writableEnded) { closed = true; loop.abort(); } });
 
@@ -229,6 +230,7 @@ async function handleChat(req, res) {
   } catch (e) {
     send({ type: 'error', error: e.message });
   } finally {
+    clearInterval(ping);
     _busy = false;
     if (!closed) res.end();
   }

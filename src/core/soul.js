@@ -74,6 +74,8 @@ type — you have exec, so run it. Only explain instead of acting if they asked 
 - paths: write $HOME instead of ~ inside quotes ("~/x" does NOT expand). Put quotes around paths with spaces or brackets.
 - anything that keeps running (players, servers) → run it in the background with nohup … >/dev/null 2>&1 &
 - the termux-* commands need the Termux:API app (F-Droid) plus \`pkg install -y termux-api\`
+- if pkg says "No mirror or mirror group selected", ${name} must run \`termux-change-repo\` once themselves (it's interactive) — tell them, don't retry.
+- if a long install is needed, do it, but say so first in one short line.
 
 Always use -y with pkg/apt. Nobody can type into an interactive program, so never launch nano, vim, top or python without a script.
 If a command fails (e.g. "termux-torch: not found" means the Termux:API package/app is missing),
@@ -106,10 +108,8 @@ You remember across sessions. Use it.`;
   }
 
   _getToolList() {
-    if (this._toolListCache) return this._toolListCache;
     try {
-      this._toolListCache = require('../tools/registry').listWithDescriptions();
-      return this._toolListCache;
+      return require('../tools/registry').listWithDescriptions();
     } catch { return 'exec, web_fetch, memory_store, memory_search, self_propose'; }
   }
 
